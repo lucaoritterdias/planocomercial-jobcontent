@@ -4,7 +4,6 @@ const getDiagnosticById = vi.fn();
 const completeDiagnostic = vi.fn();
 const getCompanyById = vi.fn();
 const getLeadById = vi.fn();
-const getLatestPdfReport = vi.fn();
 const findIntegrationByEvent = vi.fn();
 const createIntegrationIfAbsent = vi.fn();
 const markIntegrationSent = vi.fn();
@@ -12,7 +11,6 @@ const markIntegrationFailed = vi.fn();
 const markIntegrationPermanentlyFailed = vi.fn();
 const getCommercialPlanResult = vi.fn();
 const sendConversion = vi.fn();
-const storageCreateSignedUrl = vi.fn();
 
 // vi.hoisted: a factory de vi.mock roda antes de qualquer "let" normal do
 // arquivo — precisamos de um objeto mutável que já exista nesse momento
@@ -34,7 +32,6 @@ vi.mock("@/lib/database", () => ({
   diagnostics: { getDiagnosticById, completeDiagnostic },
   companies: { getCompanyById },
   leads: { getLeadById },
-  pdfReports: { getLatestPdfReport },
   rdIntegrations: {
     findIntegrationByEvent,
     createIntegrationIfAbsent,
@@ -46,11 +43,6 @@ vi.mock("@/lib/database", () => ({
 
 vi.mock("@/server/get-commercial-plan-result", () => ({ getCommercialPlanResult }));
 vi.mock("@/lib/rd-station/client", () => ({ sendConversion }));
-vi.mock("@/lib/supabase/admin", () => ({
-  createSupabaseAdminClient: () => ({
-    storage: { from: () => ({ createSignedUrl: storageCreateSignedUrl }) },
-  }),
-}));
 
 const { sendRdStationConversion } = await import("@/server/send-rd-station-conversion");
 
@@ -102,7 +94,6 @@ beforeEach(() => {
   completeDiagnostic.mockResolvedValue(diagnostic({ status: "completed" }));
   getCompanyById.mockResolvedValue(company());
   getLeadById.mockResolvedValue(lead());
-  getLatestPdfReport.mockResolvedValue(null);
   getCommercialPlanResult.mockResolvedValue(completedPlanResult());
   findIntegrationByEvent.mockResolvedValue(null);
   createIntegrationIfAbsent.mockResolvedValue({
@@ -113,7 +104,6 @@ beforeEach(() => {
   markIntegrationFailed.mockResolvedValue({});
   markIntegrationPermanentlyFailed.mockResolvedValue({});
   sendConversion.mockResolvedValue({ kind: "success", httpStatus: 200, latencyMs: 10, eventUuid: "abc" });
-  storageCreateSignedUrl.mockResolvedValue({ data: { signedUrl: "https://storage.example/pdf-signed" }, error: null });
 });
 
 describe("sendRdStationConversion — pré-condições", () => {
@@ -183,18 +173,19 @@ describe("sendRdStationConversion — sucesso e payload", () => {
     expect(markIntegrationSent).toHaveBeenCalledWith("integration-1");
   });
 
-  it("inclui o link assinado do PDF quando já existe um pdf_reports 'available'", async () => {
-    getLatestPdfReport.mockResolvedValue({ storage_path: "diagnostic-1/abc.pdf", status: "available" });
+  it("envia o link estável do plano em PDF mesmo sem nenhum PDF já gerado — o caso real, já que o PDF só nasce no primeiro acesso", async () => {
     await sendRdStationConversion("diagnostic-1");
     const [payloadArg] = sendConversion.mock.calls[0];
-    expect(payloadArg.cf_link_plano_comercial).toBe("https://storage.example/pdf-signed");
+    expect(payloadArg.cf_link_plano_comercial).toBe(
+      "https://exemplo.com/diagnostico/diagnostic-1/plano.pdf",
+    );
   });
 
-  it("não inclui link de PDF quando ainda não existe nenhum pdf_reports", async () => {
-    getLatestPdfReport.mockResolvedValue(null);
+  it("o link do PDF é sempre o do app, nunca uma signed URL do Storage (que expiraria dentro do CRM)", async () => {
     await sendRdStationConversion("diagnostic-1");
     const [payloadArg] = sendConversion.mock.calls[0];
-    expect(payloadArg.cf_link_plano_comercial).toBeUndefined();
+    expect(payloadArg.cf_link_plano_comercial).toMatch(/^https:\/\/exemplo\.com\//);
+    expect(payloadArg.cf_link_plano_comercial).not.toContain("token=");
   });
 });
 

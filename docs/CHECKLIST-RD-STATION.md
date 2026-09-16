@@ -76,11 +76,19 @@ mudar (nunca só por ajuste cosmético de redação).
       | `cf_gargalo_principal`       | Gargalo comercial identificado (texto, em português) |
       | `cf_nivel_confianca`         | `low` / `medium` / `high`                          |
       | `cf_segmento_empresa`        | Segmento da empresa, se confirmado na jornada      |
-      | `cf_link_plano_comercial`    | Link assinado do PDF (só quando já existir um)     |
+      | `cf_link_plano_comercial`    | Link permanente do plano em PDF (sempre enviado)   |
 
       Removidos por decisão do time (não são mais enviados nem precisam
       existir no RD Station): `cf_risco_secundario`, `cf_qualidade_dados`,
       `cf_status_diagnostico`.
+
+      Sobre o `cf_link_plano_comercial`: o link é sempre
+      `<APP_URL>/diagnostico/<id-do-diagnostico>/plano.pdf` — um endereço
+      do próprio app, que **não expira**. Cada acesso gera (ou reaproveita)
+      o PDF e redireciona para um link assinado de 1 hora, então o time
+      comercial pode abrir o plano semanas depois e sempre recebe a versão
+      atual. Confirme que `APP_URL` no ambiente de produção é o domínio
+      público real: é ele que vai gravado no CRM.
 
       O nome da pessoa agora é capturado na Tela 2 (campo "Seu nome") e
       enviado no campo nativo `name` — não é um `cf_*`, não precisa ser

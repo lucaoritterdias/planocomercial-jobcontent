@@ -6,17 +6,10 @@ import { CHALLENGES } from "@/lib/challenges/challenge-config";
 import { RD_CONVERSION_IDENTIFIER } from "@/lib/rd-station/config";
 import { sendConversion } from "@/lib/rd-station/client";
 import { buildRdStationConversionPayload } from "@/lib/rd-station/payload";
-import { companies, diagnostics, leads, pdfReports, rdIntegrations } from "@/lib/database";
-import { createSupabaseAdminClient } from "@/lib/supabase/admin";
+import { companies, diagnostics, leads, rdIntegrations } from "@/lib/database";
+import { buildPlanPdfUrl } from "@/lib/pdf/plan-pdf-link";
 import { getCommercialPlanResult } from "@/server/get-commercial-plan-result";
 
-const PDF_BUCKET = "pdf-reports";
-/**
- * TTL bem maior que o do botão de download avulso (1h, ver
- * generate-commercial-plan-pdf.tsx): este link vai para o CRM, para uso do
- * time comercial ao longo de vários dias — não é um clique único.
- */
-const PDF_LINK_SIGNED_URL_TTL_SECONDS = 60 * 60 * 24 * 7; // 7 dias
 /** Tentativas totais (1ª + retries) antes de desistir e marcar falha permanente. */
 const MAX_ATTEMPTS = 3;
 
@@ -29,19 +22,6 @@ export type SendRdStationConversionResult =
   | { status: "sent" }
   | { status: "retrying" }
   | { status: "failed"; reason: "validation_error" | "auth_error" | "too_many_attempts" };
-
-async function findAvailablePdfLink(diagnosticId: string): Promise<string | null> {
-  const latest = await pdfReports.getLatestPdfReport(diagnosticId);
-  if (!latest || latest.status !== "available") return null;
-
-  const supabase = createSupabaseAdminClient();
-  const { data, error } = await supabase.storage
-    .from(PDF_BUCKET)
-    .createSignedUrl(latest.storage_path, PDF_LINK_SIGNED_URL_TTL_SECONDS);
-
-  if (error || !data?.signedUrl) return null;
-  return data.signedUrl;
-}
 
 /**
  * Envia a conversão "plano-comercial-90-dias" ao RD Station Marketing
@@ -120,7 +100,14 @@ export async function sendRdStationConversion(diagnosticId: string): Promise<Sen
     return { status: "failed", reason: "too_many_attempts" };
   }
 
-  const pdfLink = await findAvailablePdfLink(diagnosticId);
+  // Link estável da rota do PDF, não uma signed URL do Storage: o plano
+  // já está pronto (checado acima), então o link funciona a partir de
+  // agora — mesmo que o arquivo ainda não tenha sido renderizado, o que
+  // só acontece no primeiro acesso. Importante porque esta conversão é
+  // enviada UMA vez por diagnóstico (idempotência abaixo): um link que
+  // dependesse de um PDF já existente nunca chegaria ao CRM, já que o
+  // PDF só é gerado quando alguém pede.
+  const pdfLink = buildPlanPdfUrl(env.APP_URL, diagnosticId);
 
   const payload = buildRdStationConversionPayload({
     lead: {
@@ -149,7 +136,7 @@ export async function sendRdStationConversion(diagnosticId: string): Promise<Sen
       primaryBottleneckLabel: diagnostic.primary_bottleneck ? dimensionLabel(diagnostic.primary_bottleneck) : null,
       confidenceLevel: diagnostic.confidence_level,
     },
-    pdf: pdfLink ? { url: pdfLink } : null,
+    pdf: { url: pdfLink },
   });
 
   const { row: integrationRow } =
