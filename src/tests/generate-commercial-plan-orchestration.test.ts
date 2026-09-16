@@ -227,7 +227,7 @@ describe("generateCommercialPlan — falhas nunca perdem o diagnóstico", () => 
     const result = await generateCommercialPlan("diagnostic-1");
 
     expect(result).toEqual({ status: "failed", reason: "invalid_output", reportId: "report-1" });
-    expect(updateAiReportStatus).toHaveBeenCalledWith("report-1", "failed");
+    expect(updateAiReportStatus).toHaveBeenCalledWith("report-1", "failed", { last_error: "invalid_output" });
   });
 
   it("timeout/indisponibilidade -> status failed, motivo transport_error", async () => {
@@ -240,7 +240,33 @@ describe("generateCommercialPlan — falhas nunca perdem o diagnóstico", () => 
     expect(result).toEqual({ status: "failed", reason: "transport_error", reportId: "report-1" });
   });
 
-  it("número não rastreável ao contexto -> rejeitado, status failed, motivo invalid_output", async () => {
+  it("valor de indicador não rastreável ao contexto -> anulado (null), plano gerado e salvo sem ele", async () => {
+    generateCommercialPlanContent.mockResolvedValue({
+      plan: validPlan({
+        indicators: [{ name: "Taxa", currentValue: "1000", targetValue: "47%", frequency: "weekly" }],
+      }),
+      inputTokens: 400,
+      outputTokens: 700,
+      model: "modelo-de-teste",
+      latencyMs: 900,
+    });
+
+    const result = await generateCommercialPlan("diagnostic-1");
+
+    expect(result.status).toBe("generated");
+    const expectedIndicators = [{ name: "Taxa", currentValue: "1000", targetValue: null, frequency: "weekly" }];
+    expect(result).toEqual(
+      expect.objectContaining({ plan: expect.objectContaining({ indicators: expectedIndicators }) }),
+    );
+    expect(updateAiReportStatus).toHaveBeenCalledWith(
+      "report-1",
+      "validated",
+      expect.objectContaining({ response_json: expect.objectContaining({ indicators: expectedIndicators }) }),
+    );
+  });
+
+  it("número não rastreável em texto corrido não descarta o plano (só vai para o log)", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     generateCommercialPlanContent.mockResolvedValue({
       plan: validPlan({ goalGapInterpretation: "A conversão está travada em exatos 47% hoje." }),
       inputTokens: 400,
@@ -251,7 +277,9 @@ describe("generateCommercialPlan — falhas nunca perdem o diagnóstico", () => 
 
     const result = await generateCommercialPlan("diagnostic-1");
 
-    expect(result).toEqual({ status: "failed", reason: "invalid_output", reportId: "report-1" });
+    expect(result.status).toBe("generated");
+    expect(warn).toHaveBeenCalled();
+    warn.mockRestore();
   });
 
   it("respeita o limite de tentativas por diagnóstico (evita custo ilimitado de retry)", async () => {

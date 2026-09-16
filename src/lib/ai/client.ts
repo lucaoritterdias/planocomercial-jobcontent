@@ -5,6 +5,7 @@ import { z, type ZodType } from "zod";
 
 import { parseServerEnv } from "@/config/env.server";
 import { AiResponseValidationError } from "@/lib/ai/errors";
+import { fitToJsonSchema } from "@/lib/ai/fit-to-json-schema";
 
 let cachedClient: OpenAI | null = null;
 
@@ -103,6 +104,8 @@ export async function generateStructuredJson<T>(params: {
   maxRetries?: number;
   /** Só passe true para um schema já conferido: todo campo obrigatório ou `.nullable()`, nunca `.optional()`/`.default()`. */
   strict?: boolean;
+  /** Corta textos/listas acima de maxLength/maxItems (e limita minimum/maximum) antes de validar, em vez de rejeitar a resposta inteira — ver src/lib/ai/fit-to-json-schema.ts. */
+  fitToLimits?: boolean;
 }): Promise<GenerateStructuredJsonResult<T>> {
   const env = parseServerEnv();
   const client = getClient();
@@ -143,6 +146,13 @@ export async function generateStructuredJson<T>(params: {
 
       const latencyMs = Date.now() - startedAt;
 
+      if (response.choices[0]?.finish_reason === "length") {
+        throw new AiResponseValidationError(
+          "A resposta da IA foi cortada por atingir o limite de tokens de saída (max_tokens).",
+          response.usage,
+        );
+      }
+
       const toolCall = response.choices[0]?.message.tool_calls?.find(
         (call): call is OpenAI.Chat.ChatCompletionMessageFunctionToolCall =>
           call.type === "function" && call.function.name === params.toolName,
@@ -165,7 +175,9 @@ export async function generateStructuredJson<T>(params: {
         );
       }
 
-      const validation = params.schema.safeParse(parsedArguments);
+      const validation = params.schema.safeParse(
+        params.fitToLimits ? fitToJsonSchema(parsedArguments, jsonSchema) : parsedArguments,
+      );
       if (!validation.success) {
         throw new AiResponseValidationError(
           `A resposta da IA não corresponde ao schema esperado: ${validation.error.message}`,

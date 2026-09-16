@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { findUngroundedNumbers } from "@/lib/ai/numeric-guard";
+import { findUngroundedNumbers, sanitizeUngroundedNumbers } from "@/lib/ai/numeric-guard";
 import type { CommercialPlan } from "@/schemas/commercial-plan";
 
 function basePlan(overrides: Partial<CommercialPlan> = {}): CommercialPlan {
@@ -112,5 +112,61 @@ describe("findUngroundedNumbers", () => {
       priorities: basePlan().priorities.map((p, i) => (i === 0 ? { ...p, title: "Prioridade número 99" } : p)),
     });
     expect(findUngroundedNumbers(plan, "{}")).toEqual([]);
+  });
+});
+
+describe("findUngroundedNumbers — formatos brasileiros", () => {
+  const CONTEXT_WITH_ANSWERS = JSON.stringify({
+    relevantAnswers: [
+      { questionKey: "U1", answer: "50000" },
+      { questionKey: "U2", answer: "ticket de uns 2 mil" },
+      { questionKey: "U3", answer: "12,5" },
+    ],
+  });
+
+  it.each([
+    "A meta exige R$ 50.000 por mês.",
+    "A meta exige R$ 50.000,00 por mês.",
+    "A meta exige 50 mil por mês.",
+    "O ticket médio é de R$ 2.000.",
+    "O ticket médio é de 2 mil reais.",
+    "A taxa atual é 12.5%.",
+    "A taxa atual é 12,50%.",
+  ])("reconhece o mesmo valor escrito de outro jeito: %s", (text) => {
+    const plan = basePlan({ goalGapInterpretation: text });
+    expect(findUngroundedNumbers(plan, CONTEXT_WITH_ANSWERS)).toEqual([]);
+  });
+
+  it("ainda acusa um valor que não existe no contexto, mesmo formatado", () => {
+    const plan = basePlan({ goalGapInterpretation: "A meta exige R$ 80.000 por mês." });
+    expect(findUngroundedNumbers(plan, CONTEXT_WITH_ANSWERS)).toEqual([
+      { field: "goalGapInterpretation", value: "80.000" },
+    ]);
+  });
+
+  it("não confunde palavras começando com 'mi'/'k' com escala (ex.: 30 minutos)", () => {
+    const plan = basePlan({ goalGapInterpretation: "Reuniões de 30 minutos." });
+    expect(findUngroundedNumbers(plan, "{}")).toEqual([]);
+  });
+});
+
+describe("sanitizeUngroundedNumbers", () => {
+  it("anula só o valor de indicador inventado e mantém o resto do plano", () => {
+    const plan = basePlan({
+      goalGapInterpretation: "Conversão em 47%.",
+      indicators: [
+        { name: "Taxa", currentValue: "20%", targetValue: "35%", frequency: "weekly" },
+        { name: "Outra", currentValue: null, targetValue: null, frequency: "monthly" },
+      ],
+    });
+
+    const result = sanitizeUngroundedNumbers(plan, CONTEXT_WITH_20_PERCENT);
+
+    expect(result.plan.indicators[0]).toEqual({ name: "Taxa", currentValue: "20%", targetValue: null, frequency: "weekly" });
+    expect(result.plan.indicators[1]).toEqual(plan.indicators[1]);
+    expect(result.plan.goalGapInterpretation).toBe("Conversão em 47%.");
+    expect(result.removed).toEqual([{ field: "indicators[0].targetValue", value: "35" }]);
+    expect(result.remaining).toEqual([{ field: "goalGapInterpretation", value: "47" }]);
+    expect(plan.indicators[0].targetValue).toBe("35%"); // não muta o original
   });
 });

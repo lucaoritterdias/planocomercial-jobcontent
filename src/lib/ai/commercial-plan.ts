@@ -20,8 +20,17 @@ export type CommercialPlanAiCall = {
   promptVersion: string;
 };
 
-/** Saída é grande (12 blocos, até 3x5 ações, agenda semanal) — orçamento generoso mas ainda limitado. */
-const MAX_OUTPUT_TOKENS = 6_000;
+/** Saída é grande (12 blocos, até 3x5 ações, agenda semanal, tudo em português) — 6.000 chegava a cortar o JSON no meio. */
+const MAX_OUTPUT_TOKENS = 10_000;
+
+/**
+ * A geração roda dentro da Server Action da página do diagnóstico, que tem
+ * maxDuration = 60s (src/app/diagnostico/[diagnosticId]/page.tsx). O
+ * timeout padrão de 30s cortava respostas longas, e um retry automático
+ * (30s + 30s) nunca caberia nos 60s — então aqui é uma única chamada com
+ * mais tempo; se falhar, o usuário tem o botão "Tentar novamente".
+ */
+const TIMEOUT_MS = 50_000;
 
 /**
  * Chamada de IA do plano comercial de 90 dias: monta o prompt (com o
@@ -44,12 +53,17 @@ export async function generateCommercialPlanContent(context: AIContext): Promise
     toolName: COMMERCIAL_PLAN_TOOL_NAME,
     toolDescription: COMMERCIAL_PLAN_TOOL_DESCRIPTION,
     maxTokens: MAX_OUTPUT_TOKENS,
+    timeoutMs: TIMEOUT_MS,
+    maxRetries: 0,
     // Schema conferido: todo campo é obrigatório ou .nullable() (nunca
     // .optional()/.default()) — ver src/schemas/commercial-plan.ts.
     // Ativa o modo "Structured Outputs" da OpenAI para eliminar o erro de
     // estrutura visto em produção (campos aninhados no lugar errado,
     // ex.: "weeklyManagerAgenda" apareceu dentro de "plan90Days").
     strict: true,
+    // Structured Outputs não impõe maxLength: um texto um pouco acima do
+    // limite é cortado em vez de derrubar o plano inteiro.
+    fitToLimits: true,
   });
 
   return {

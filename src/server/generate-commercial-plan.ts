@@ -4,7 +4,7 @@ import { parseServerEnv } from "@/config/env.server";
 import { generateCommercialPlanContent } from "@/lib/ai/commercial-plan";
 import { COMMERCIAL_PLAN_PROMPT_VERSION } from "@/lib/ai/commercial-plan-prompt";
 import { AiResponseValidationError } from "@/lib/ai/errors";
-import { findUngroundedNumbers, UngroundedNumberError } from "@/lib/ai/numeric-guard";
+import { sanitizeUngroundedNumbers } from "@/lib/ai/numeric-guard";
 import { hashContent } from "@/lib/site-analysis/hash";
 import { aiReports, diagnostics } from "@/lib/database";
 import { buildCommercialPlanContext } from "@/server/build-commercial-plan-context";
@@ -24,7 +24,6 @@ export type GenerateCommercialPlanResult =
     };
 
 function classifyFailure(err: unknown): "invalid_output" | "transport_error" {
-  if (err instanceof UngroundedNumberError) return "invalid_output";
   if (err instanceof AiResponseValidationError) return "invalid_output";
   return "transport_error"; // AiCallError (timeout/rede/indisponibilidade) ou qualquer outra falha inesperada
 }
@@ -39,8 +38,12 @@ function classifyFailure(err: unknown): "invalid_output" | "transport_error" {
  * muda e o cache não bate, então uma resposta antiga nunca é servida por
  * engano. Se bater, retorna sem gastar token nenhum (cached: true).
  *
- * Nunca perde o diagnóstico: qualquer falha (JSON inválido, número não
- * rastreável ao contexto, timeout, indisponibilidade) grava um
+ * Números não rastreáveis ao contexto não descartam o plano: valores de
+ * indicador inventados viram null, e números em texto corrido só são
+ * registrados em log (ver sanitizeUngroundedNumbers).
+ *
+ * Nunca perde o diagnóstico: qualquer falha (JSON inválido, resposta
+ * cortada, timeout, indisponibilidade) grava um
  * ai_reports com status "failed" e retorna um motivo — quem chama pode
  * tentar de novo mais tarde (a próxima chamada é uma tentativa nova,
  * IDs diferentes, sujeita ao mesmo limite de tentativas). Nunca lança.
@@ -88,19 +91,23 @@ export async function generateCommercialPlan(diagnosticId: string): Promise<Gene
   try {
     const callResult = await generateCommercialPlanContent(context);
 
-    const ungrounded = findUngroundedNumbers(callResult.plan, contextJson);
-    if (ungrounded.length > 0) {
-      throw new UngroundedNumberError(ungrounded);
+    const { plan, removed, remaining } = sanitizeUngroundedNumbers(callResult.plan, contextJson);
+    if (removed.length > 0 || remaining.length > 0) {
+      const describe = (findings: typeof removed) => findings.map((f) => `${f.field}="${f.value}"`).join(", ");
+      console.warn(
+        "[generate-commercial-plan] Números não rastreáveis ao contexto —",
+        `anulados: [${describe(removed)}]; mantidos em texto: [${describe(remaining)}]`,
+      );
     }
 
     await aiReports.updateAiReportStatus(report.id, "validated", {
-      response_json: callResult.plan,
+      response_json: plan,
       input_tokens: callResult.inputTokens,
       output_tokens: callResult.outputTokens,
       latency_ms: callResult.latencyMs,
     });
 
-    return { status: "generated", plan: callResult.plan, reportId: report.id };
+    return { status: "generated", plan, reportId: report.id };
   } catch (err) {
     // Só nome + mensagem no log — nunca o objeto de erro bruto do SDK
     // (pode carregar cabeçalhos de requisição) nem qualquer segredo.

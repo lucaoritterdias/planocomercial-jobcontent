@@ -239,3 +239,61 @@ describe("generateStructuredJson — retry limitado em falhas de transporte", ()
     ).rejects.toThrow(AiCallError);
   }, 10_000);
 });
+
+describe("generateStructuredJson — resposta cortada e limites do schema", () => {
+  const LIMITED_SCHEMA = z
+    .object({
+      title: z.string().min(1).max(20),
+      note: z.string().max(10).nullable(),
+      tags: z.array(z.string().max(5)).min(1).max(2),
+      priority: z.number().int().min(1).max(3),
+    })
+    .strict();
+
+  const tooBig = {
+    title: "Um título bem maior que vinte caracteres",
+    note: "texto longo demais",
+    tags: ["abcdefgh", "b", "c"],
+    priority: 7,
+  };
+
+  it("lança AiResponseValidationError quando a resposta foi cortada por max_tokens (finish_reason=length)", async () => {
+    const response = toolResponse({ ok: true });
+    createCompletion.mockResolvedValueOnce({
+      ...response,
+      choices: [{ ...response.choices[0], finish_reason: "length" }],
+    });
+
+    await expect(
+      generateStructuredJson({ system: "s", userPrompt: "u", schema: SCHEMA, toolName: "test_tool", toolDescription: "d" }),
+    ).rejects.toThrow(/cortada/);
+  });
+
+  it("sem fitToLimits, texto acima do maxLength rejeita a resposta (comportamento padrão)", async () => {
+    createCompletion.mockResolvedValueOnce(toolResponse(tooBig));
+
+    await expect(
+      generateStructuredJson({ system: "s", userPrompt: "u", schema: LIMITED_SCHEMA, toolName: "test_tool", toolDescription: "d" }),
+    ).rejects.toThrow(AiResponseValidationError);
+  });
+
+  it("com fitToLimits, corta textos/listas e limita números em vez de rejeitar", async () => {
+    createCompletion.mockResolvedValueOnce(toolResponse(tooBig));
+
+    const result = await generateStructuredJson({
+      system: "s",
+      userPrompt: "u",
+      schema: LIMITED_SCHEMA,
+      toolName: "test_tool",
+      toolDescription: "d",
+      fitToLimits: true,
+    });
+
+    expect(result.data.title.length).toBeLessThanOrEqual(20);
+    expect(result.data.title.endsWith("…")).toBe(true);
+    expect(result.data.note!.length).toBeLessThanOrEqual(10);
+    expect(result.data.tags).toHaveLength(2);
+    expect(result.data.tags[0].length).toBeLessThanOrEqual(5);
+    expect(result.data.priority).toBe(3);
+  });
+});
