@@ -144,7 +144,8 @@ export async function generateStructuredJson<T>(params: {
       const latencyMs = Date.now() - startedAt;
 
       const toolCall = response.choices[0]?.message.tool_calls?.find(
-        (call) => call.function.name === params.toolName,
+        (call): call is OpenAI.Chat.ChatCompletionMessageFunctionToolCall =>
+          call.type === "function" && call.function.name === params.toolName,
       );
 
       if (!toolCall) {

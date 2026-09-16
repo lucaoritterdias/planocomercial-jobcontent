@@ -1,6 +1,14 @@
 import { render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
+import type { CommercialPlan } from "@/schemas/commercial-plan";
+import type {
+  CommercialPlanResultState,
+  ResultFunnelStage,
+} from "@/server/get-commercial-plan-result";
+
+type CompletedResultState = Extract<CommercialPlanResultState, { status: "completed" }>;
+
 vi.mock("next/navigation", () => ({
   notFound: () => {
     throw new Error("NEXT_NOT_FOUND");
@@ -18,7 +26,7 @@ vi.mock("@/server/actions/get-commercial-plan-pdf-action", () => ({
 
 const { ResultPage } = await import("@/components/result/result-page");
 
-function validPlan(overrides: Record<string, unknown> = {}) {
+function validPlan(overrides: Partial<CommercialPlan> = {}): CommercialPlan {
   return {
     executiveDiagnosis: "A empresa perde oportunidades por falta de critério de qualificação de leads.",
     primaryBottleneck: "conversion",
@@ -87,8 +95,8 @@ function validPlan(overrides: Record<string, unknown> = {}) {
   };
 }
 
-const CALCULABLE_STAGE = {
-  key: "leads" as const,
+const CALCULABLE_STAGE: ResultFunnelStage = {
+  key: "leads",
   label: "Leads",
   current: 100,
   required: 500,
@@ -98,8 +106,8 @@ const CALCULABLE_STAGE = {
   uncalculable: false,
 };
 
-const UNCALCULABLE_STAGE = {
-  key: "customers" as const,
+const UNCALCULABLE_STAGE: ResultFunnelStage = {
+  key: "customers",
   label: "Vendas",
   current: null,
   required: null,
@@ -109,18 +117,18 @@ const UNCALCULABLE_STAGE = {
   uncalculable: true,
 };
 
-function completedState(overrides: Record<string, unknown> = {}) {
+function completedState(overrides: Partial<CompletedResultState> = {}): CompletedResultState {
   return {
-    status: "completed" as const,
+    status: "completed",
     diagnosticId: "diagnostic-1",
     companyName: "CodeBit",
     generatedAt: "2026-01-05T00:00:00.000Z",
     plan: validPlan(),
     funnelStages: [CALCULABLE_STAGE, UNCALCULABLE_STAGE],
-    primaryBottleneck: "conversion" as const,
+    primaryBottleneck: "conversion",
     secondaryRisk: null,
     dataQualityPercentage: 60,
-    confidence: "medium" as const,
+    confidence: "medium",
     seoOpportunities: [],
     ...overrides,
   };
