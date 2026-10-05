@@ -34,8 +34,8 @@ export type StartDiagnosticInput = {
 
 /**
  * Primeira captura da jornada (Tela 2 do BRD): cria (ou reaproveita) a
- * empresa, cria o lead parcial (nome, e-mail e UTMs — cargo e WhatsApp
- * vêm só na captura final, seção 4) e cria o diagnóstico com status
+ * empresa, cria o lead parcial (nome, e-mail e UTMs —
+ * cargo vem só na captura final, seção 4) e cria o diagnóstico com status
  * "started". Registra também o evento de analytics "start_diagnostic"
  * (seção 20 do BRD).
  *

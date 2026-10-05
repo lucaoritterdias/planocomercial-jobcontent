@@ -56,7 +56,13 @@ export async function startDiagnosticAction(
 
     for (const issue of parsed.error.issues) {
       const key = issue.path[0];
-      if (key === "name" || key === "companyName" || key === "website" || key === "email" || key === "keywords") {
+      if (
+        key === "name" ||
+        key === "companyName" ||
+        key === "website" ||
+        key === "email" ||
+        key === "keywords"
+      ) {
         // Mantém a primeira mensagem por campo.
         fieldErrors[key] ??= issue.message;
       }

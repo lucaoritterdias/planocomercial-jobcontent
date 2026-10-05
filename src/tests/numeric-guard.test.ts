@@ -19,11 +19,36 @@ function basePlan(overrides: Partial<CommercialPlan> = {}): CommercialPlan {
       primaryIndicator: "Indicador",
       timeframe: "30 dias",
     })),
+    strategicSummary: {
+      headline: "Meta do trimestre.",
+      positioning: "Posicionamento.",
+      channelStrategy: "Estratégia de canais.",
+      contentJourney: "Jornada de conteúdo.",
+      mediaBudgetPriority: [
+        { channel: "Google", priority: "alta" },
+        { channel: "Meta", priority: "baixa" },
+      ],
+      commercialProcess: "Processo comercial.",
+      premises: "Premissas.",
+    },
+    phaseSummaries: {
+      days1to30: { goal: "Meta do mês 1.", milestone: "Marco do mês 1." },
+      days31to60: { goal: "Meta do mês 2.", milestone: "Marco do mês 2." },
+      days61to90: { goal: "Meta do mês 3.", milestone: "Marco do mês 3." },
+    },
     plan90Days: {
       days1to30: [
         {
           title: "Ação",
           objective: "Objetivo",
+          actionType: "sales_process",
+          details: ["Detalhe 1 da ação", "Detalhe 2 da ação"],
+          blogBrief: null,
+          richMaterialBrief: null,
+          paidTrafficBrief: null,
+          cadenceBrief: null,
+          landingPageBrief: null,
+          playbookBrief: null,
           suggestedOwner: "Vendas",
           deadline: "Semana 1",
           indicator: "Indicador",
@@ -35,6 +60,14 @@ function basePlan(overrides: Partial<CommercialPlan> = {}): CommercialPlan {
         {
           title: "Ação",
           objective: "Objetivo",
+          actionType: "sales_process",
+          details: ["Detalhe 1 da ação", "Detalhe 2 da ação"],
+          blogBrief: null,
+          richMaterialBrief: null,
+          paidTrafficBrief: null,
+          cadenceBrief: null,
+          landingPageBrief: null,
+          playbookBrief: null,
           suggestedOwner: "Vendas",
           deadline: "Semana 5",
           indicator: "Indicador",
@@ -46,6 +79,14 @@ function basePlan(overrides: Partial<CommercialPlan> = {}): CommercialPlan {
         {
           title: "Ação",
           objective: "Objetivo",
+          actionType: "sales_process",
+          details: ["Detalhe 1 da ação", "Detalhe 2 da ação"],
+          blogBrief: null,
+          richMaterialBrief: null,
+          paidTrafficBrief: null,
+          cadenceBrief: null,
+          landingPageBrief: null,
+          playbookBrief: null,
           suggestedOwner: "Vendas",
           deadline: "Semana 9",
           indicator: "Indicador",
@@ -80,6 +121,14 @@ describe("findUngroundedNumbers", () => {
     expect(findUngroundedNumbers(plan, CONTEXT_WITH_20_PERCENT)).toEqual([]);
   });
 
+  it("aceita a meta citada com separador de milhar pt-BR (ex.: \"R$ 300.000\") quando o contexto tem 300000 puro — bug real: IA escreveu a própria meta e foi rejeitada", () => {
+    const contextWithGoal = JSON.stringify({ metrics: { monthlyGoal: 300000 } });
+    const plan = basePlan({
+      goalGapInterpretation: "O gap para a meta de R$ 300.000 está concentrado na conversão.",
+    });
+    expect(findUngroundedNumbers(plan, contextWithGoal)).toEqual([]);
+  });
+
   it("rejeita um número citado que não existe em lugar nenhum do contexto (número inventado)", () => {
     const plan = basePlan({
       goalGapInterpretation: "A conversão está em 47%, bem abaixo do esperado.",
@@ -95,6 +144,121 @@ describe("findUngroundedNumbers", () => {
     });
     const findings = findUngroundedNumbers(plan, CONTEXT_WITH_20_PERCENT);
     expect(findings.some((f) => f.field === "indicators[0].currentValue" && f.value === "35")).toBe(true);
+  });
+
+  it("rejeita um número inventado no marco de sucesso de uma fase (phaseSummaries)", () => {
+    const plan = basePlan({
+      phaseSummaries: {
+        days1to30: { goal: "Meta do mês 1.", milestone: "45 leads no mês." },
+        days31to60: { goal: "Meta do mês 2.", milestone: "Marco do mês 2." },
+        days61to90: { goal: "Meta do mês 3.", milestone: "Marco do mês 3." },
+      },
+    });
+    const findings = findUngroundedNumbers(plan, "{}");
+    expect(findings.some((f) => f.field === "phaseSummaries.days1to30.milestone" && f.value === "45")).toBe(
+      true,
+    );
+  });
+
+  it("aceita um número no marco de sucesso de uma fase quando ele já existe no contexto", () => {
+    const plan = basePlan({
+      phaseSummaries: {
+        days1to30: { goal: "Meta do mês 1.", milestone: "35 leads no mês." },
+        days31to60: { goal: "Meta do mês 2.", milestone: "Marco do mês 2." },
+        days61to90: { goal: "Meta do mês 3.", milestone: "Marco do mês 3." },
+      },
+    });
+    const contextWithFunnel = JSON.stringify({ funnelAnalysis: { requiredFunnel: { leads: 35 } } });
+    expect(findUngroundedNumbers(plan, contextWithFunnel)).toEqual([]);
+  });
+
+  it("rejeita um número inventado no headline do resumo estratégico — bug real: a mesma 'ponte numérica' encontrada em phaseSummaries também podia aparecer aqui, sem checagem nenhuma até agora", () => {
+    const plan = basePlan({
+      strategicSummary: {
+        ...basePlan().strategicSummary,
+        headline: "Construir um canal que entregue 35 leads qualificados por mês.",
+      },
+    });
+    const findings = findUngroundedNumbers(plan, "{}");
+    expect(findings.some((f) => f.field === "strategicSummary.headline" && f.value === "35")).toBe(true);
+  });
+
+  it("não varre blogBrief/richMaterialBrief/paidTrafficBrief (igual a details) — números criativos de copy não travam a validação", () => {
+    const plan = basePlan({
+      plan90Days: {
+        ...basePlan().plan90Days,
+        days1to30: [
+          {
+            title: "Post de blog",
+            objective: "Objetivo",
+            actionType: "content_blog",
+            details: ["5 sinais de dependência de indicação"],
+            blogBrief: {
+              subtitle: "Um gancho qualquer com 99% citado sem vir do contexto.",
+              sections: [
+                { heading: "H2 com número 47 solto", body: "Corpo com 123 solto, também não vindo do contexto." },
+                { heading: "Segunda seção", body: "Mais texto de apoio." },
+              ],
+            },
+            richMaterialBrief: null,
+            paidTrafficBrief: null,
+            cadenceBrief: null,
+            landingPageBrief: null,
+            playbookBrief: null,
+            suggestedOwner: "Marketing",
+            deadline: "Semana 1",
+            indicator: "Indicador",
+            completionCriteria: "Critério",
+            relatedPriority: 1,
+          },
+        ],
+      },
+    });
+    expect(findUngroundedNumbers(plan, "{}")).toEqual([]);
+  });
+
+  it("não varre cadenceBrief nem playbookBrief (igual a details) — números soltos ali não travam a validação", () => {
+    const plan = basePlan({
+      plan90Days: {
+        ...basePlan().plan90Days,
+        days1to30: [
+          {
+            title: "Cadência de follow-up",
+            objective: "Objetivo",
+            actionType: "crm_pipeline",
+            details: ["Cadência de 5 dias após proposta"],
+            blogBrief: null,
+            richMaterialBrief: null,
+            paidTrafficBrief: null,
+            cadenceBrief: {
+              days: [
+                { channels: ["email", "whatsapp"], goal: "Retomar a proposta enviada há 47 dias" },
+                { channels: ["phone"], goal: "Mostrar o caso que fechou em 99 dias" },
+                { channels: ["whatsapp"], goal: "Contato" },
+                { channels: ["linkedin"], goal: "Contato" },
+                { channels: ["email"], goal: "Encerrar" },
+              ],
+            },
+            landingPageBrief: null,
+            playbookBrief: {
+              steps: [
+                { title: "Listar os 12 melhores clientes", howTo: "x" },
+                { title: "Passo", howTo: "x" },
+                { title: "Passo", howTo: "x" },
+                { title: "Passo", howTo: "x" },
+              ],
+              adoptionTip: "Revisar a cada 45 dias.",
+            },
+            suggestedOwner: "Vendas",
+            deadline: "Semana 1",
+            indicator: "Indicador",
+            completionCriteria: "Critério",
+            relatedPriority: 1,
+          },
+        ],
+      },
+    });
+    expect(findUngroundedNumbers(plan, "{}")).toEqual([]);
   });
 
   it("nunca acusa números estruturais do formato (1-3 prioridades, fases de 30/60/90 dias)", () => {

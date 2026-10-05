@@ -77,26 +77,18 @@ describe("startDiagnosticSchema", () => {
     expect(result.success).toBe(false);
   });
 
-  describe("e-mail corporativo (rejeita provedores pessoais/gratuitos)", () => {
-    it.each([
-      "maria@gmail.com",
-      "maria@Gmail.com",
-      "maria@yahoo.com",
-      "maria@yahoo.com.br",
-      "maria@hotmail.com",
-      "maria@outlook.com",
-      "maria@icloud.com",
-      "maria@uol.com.br",
-      "maria@bol.com.br",
-    ])("rejeita %s", (email) => {
+  it.each(["maria@gmail.com", "maria@hotmail.com", "maria@yahoo.com.br", "maria@codebit.com.br"])(
+    "aceita qualquer e-mail válido, pessoal ou corporativo: %s",
+    (email) => {
       const result = startDiagnosticSchema.safeParse({ ...baseInput, email });
-      expect(result.success).toBe(false);
-    });
-
-    it("aceita um e-mail de domínio corporativo normal", () => {
-      const result = startDiagnosticSchema.safeParse({ ...baseInput, email: "maria@codebit.com.br" });
       expect(result.success).toBe(true);
-    });
+    },
+  );
+
+  it("ignora um campo de telefone, mesmo se enviado (não faz mais parte do formulário)", () => {
+    const result = startDiagnosticSchema.safeParse({ ...baseInput, phone: "(11) 98765-4321" });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data).not.toHaveProperty("phone");
   });
 
   it("captura os UTMs quando presentes e os omite quando ausentes", () => {

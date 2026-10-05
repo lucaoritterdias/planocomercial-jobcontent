@@ -16,14 +16,15 @@ vi.mock("@/server/actions/start-diagnostic-initial-state", () => ({
 const { CaptureForm } = await import("@/components/diagnostic/capture-form");
 
 describe("CaptureForm", () => {
-  it("exibe os cinco campos da primeira captura", () => {
+  it("exibe os cinco campos da primeira captura, sem telefone", () => {
     render(<CaptureForm />);
 
     expect(screen.getByLabelText("Seu nome")).toBeInTheDocument();
     expect(screen.getByLabelText("Nome da empresa")).toBeInTheDocument();
     expect(screen.getByLabelText(/Site da empresa/)).toBeInTheDocument();
-    expect(screen.getByLabelText("E-mail corporativo")).toBeInTheDocument();
+    expect(screen.getByLabelText("E-mail")).toBeInTheDocument();
     expect(screen.getByLabelText("Palavras-chave do negócio")).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Telefone/)).not.toBeInTheDocument();
   });
 
   it("marca nome, empresa, e-mail e palavras-chave como obrigatórios (site é opcional)", () => {
@@ -31,9 +32,14 @@ describe("CaptureForm", () => {
 
     expect(screen.getByLabelText("Seu nome")).toBeRequired();
     expect(screen.getByLabelText("Nome da empresa")).toBeRequired();
-    expect(screen.getByLabelText("E-mail corporativo")).toBeRequired();
+    expect(screen.getByLabelText("E-mail")).toBeRequired();
     expect(screen.getByLabelText("Palavras-chave do negócio")).toBeRequired();
     expect(screen.getByLabelText(/Site da empresa/)).not.toBeRequired();
+  });
+
+  it("não exige mais e-mail corporativo", () => {
+    render(<CaptureForm />);
+    expect(screen.queryByText(/corporativo/i)).not.toBeInTheDocument();
   });
 
   it("explica quantas palavras-chave informar", () => {

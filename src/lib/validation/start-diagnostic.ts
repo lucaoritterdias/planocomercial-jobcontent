@@ -1,7 +1,5 @@
 import { z } from "zod";
 
-import { isFreeEmailDomain } from "@/lib/validation/free-email-providers";
-
 /**
  * Converte um valor de FormData (string | null) em string, tratando
  * ausência de campo como string vazia. Usado como preprocess para que
@@ -100,17 +98,14 @@ export const startDiagnosticSchema = z.object({
       .optional(),
   ),
 
+  // Qualquer e-mail válido — inclusive pessoal (Gmail, Hotmail etc.).
   email: z.preprocess(
     toStringOrEmpty,
     z
       .string()
       .trim()
-      .min(1, "Informe seu e-mail corporativo.")
-      .email("Informe um e-mail válido (ex.: voce@suaempresa.com.br).")
-      .refine(
-        (value) => !isFreeEmailDomain(value),
-        "Informe um e-mail corporativo — não aceitamos e-mails pessoais (Gmail, Yahoo, Hotmail, etc.).",
-      ),
+      .min(1, "Informe seu e-mail.")
+      .email("Informe um e-mail válido (ex.: voce@email.com.br)."),
   ),
 
   // Palavras-chave que resumem o negócio (5 a 10) — usadas pela IA como

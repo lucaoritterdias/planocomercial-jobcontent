@@ -41,8 +41,8 @@ function SubmitButton() {
 }
 
 /**
- * Tela 2 (parte 1) — primeira captura da jornada: empresa, site, e-mail
- * corporativo e palavras-chave do negócio (seção 4 do BRD). Ao enviar,
+ * Tela 2 (parte 1) — primeira captura da jornada: nome, empresa, site,
+ * e-mail e palavras-chave do negócio (seção 4 do BRD). Ao enviar,
  * cria company + lead parcial + diagnostic (status "started") e
  * redireciona para a próxima etapa.
  *
@@ -197,29 +197,24 @@ export function CaptureForm() {
             </div>
 
             <div className="flex flex-col gap-2">
-              <Label htmlFor="email">E-mail corporativo</Label>
+              <Label htmlFor="email">E-mail</Label>
               <Input
                 id="email"
                 name="email"
                 type="email"
-                placeholder="voce@suaempresa.com.br"
+                placeholder="voce@email.com.br"
                 autoComplete="email"
                 required
                 value={email}
                 onChange={(event) => setEmail(event.target.value)}
                 aria-invalid={Boolean(state.fieldErrors?.email)}
-                aria-describedby={state.fieldErrors?.email ? "email-error" : "email-hint"}
+                aria-describedby={state.fieldErrors?.email ? "email-error" : undefined}
               />
               {state.fieldErrors?.email ? (
                 <p id="email-error" role="alert" className="text-destructive text-sm">
                   {state.fieldErrors.email}
                 </p>
-              ) : (
-                <p id="email-hint" className="text-muted-foreground text-xs">
-                  Precisa ser um e-mail corporativo — não aceitamos e-mails pessoais (Gmail,
-                  Yahoo, Hotmail, etc.).
-                </p>
-              )}
+              ) : null}
             </div>
 
             <div className="flex flex-col gap-2">
@@ -260,8 +255,8 @@ export function CaptureForm() {
                 LGPD_CONSENT_VERSION em src/server/start-diagnostic.ts. */}
             <p className="text-muted-foreground text-xs">
               Ao continuar, você concorda em receber este diagnóstico e contato comercial
-              da Job Content por e-mail sobre o Plano Comercial Inteligente em 90 Dias™.
-              Tratamos seus dados conforme a LGPD.
+              da Job Content por e-mail sobre o Plano
+              Comercial Inteligente em 90 Dias™. Tratamos seus dados conforme a LGPD.
             </p>
 
             <SubmitButton />

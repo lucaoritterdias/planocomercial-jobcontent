@@ -81,10 +81,11 @@ export async function generateCommercialPlanPdf(
       plan: result.plan,
       funnelStages: result.funnelStages,
       primaryBottleneck: result.primaryBottleneck,
-      secondaryRisk: result.secondaryRisk,
       dataQualityPercentage: result.dataQualityPercentage,
       confidence: result.confidence,
       seoOpportunities: result.seoOpportunities,
+      companyName: result.companyName,
+      companyWebsite: result.companyWebsite,
       templateVersion: PDF_TEMPLATE_VERSION,
     }),
   );
@@ -127,11 +128,11 @@ export async function generateCommercialPlanPdf(
     buffer = await renderToBuffer(
       <CommercialPlanDocument
         companyName={result.companyName}
+        companyWebsite={result.companyWebsite}
         generatedAt={result.generatedAt}
         plan={result.plan}
         funnelStages={result.funnelStages}
         primaryBottleneck={result.primaryBottleneck}
-        secondaryRisk={result.secondaryRisk}
         dataQualityPercentage={result.dataQualityPercentage}
         confidence={result.confidence}
         seoOpportunities={result.seoOpportunities}
