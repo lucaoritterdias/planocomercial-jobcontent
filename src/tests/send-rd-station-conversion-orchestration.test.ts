@@ -23,7 +23,7 @@ vi.mock("@/config/env.server", () => ({
     AI_API_KEY: "x",
     AI_MODEL: "x",
     SUPABASE_SERVICE_ROLE_KEY: "x",
-    APP_URL: "https://exemplo.com",
+    APP_URL: "https://quiz.jobcontent.com.br/",
     RD_STATION_API_KEY: envState.rdApiKey,
   }),
 }));
@@ -44,7 +44,9 @@ vi.mock("@/lib/database", () => ({
 vi.mock("@/server/get-commercial-plan-result", () => ({ getCommercialPlanResult }));
 vi.mock("@/lib/rd-station/client", () => ({ sendConversion }));
 
-const { sendRdStationConversion } = await import("@/server/send-rd-station-conversion");
+const { sendRdStationCaptureConversion, sendRdStationCompletedConversion: sendRdStationConversion } = await import(
+  "@/server/send-rd-station-conversion",
+);
 
 function diagnostic(overrides: Record<string, unknown> = {}) {
   return {
@@ -79,6 +81,8 @@ function lead(overrides: Record<string, unknown> = {}) {
     utm_campaign: null,
     utm_content: null,
     utm_term: null,
+    rd_traffic_source: null,
+    rd_client_tracking_id: null,
     ...overrides,
   };
 }
@@ -177,15 +181,21 @@ describe("sendRdStationConversion — sucesso e payload", () => {
     await sendRdStationConversion("diagnostic-1");
     const [payloadArg] = sendConversion.mock.calls[0];
     expect(payloadArg.cf_link_plano_comercial).toBe(
-      "https://exemplo.com/diagnostico/diagnostic-1/plano.pdf",
+      "https://quiz.jobcontent.com.br/diagnostico/diagnostic-1/plano.pdf",
     );
   });
 
   it("o link do PDF é sempre o do app, nunca uma signed URL do Storage (que expiraria dentro do CRM)", async () => {
     await sendRdStationConversion("diagnostic-1");
     const [payloadArg] = sendConversion.mock.calls[0];
-    expect(payloadArg.cf_link_plano_comercial).toMatch(/^https:\/\/exemplo\.com\//);
+    expect(payloadArg.cf_link_plano_comercial).toMatch(/^https:\/\/quiz\.jobcontent\.com\.br\//);
     expect(payloadArg.cf_link_plano_comercial).not.toContain("token=");
+  });
+
+  it("a conversão de captura também leva o link do diagnóstico", async () => {
+    await sendRdStationCaptureConversion("diagnostic-1");
+    const [payloadArg] = sendConversion.mock.calls[0];
+    expect(payloadArg.cf_link_plano_comercial).toBe("https://quiz.jobcontent.com.br/diagnostico/diagnostic-1");
   });
 });
 
@@ -259,5 +269,66 @@ describe("sendRdStationConversion — retry e classificação de erro", () => {
     expect(result).toEqual({ status: "failed", reason: "too_many_attempts" });
     expect(sendConversion).not.toHaveBeenCalled();
     expect(markIntegrationPermanentlyFailed).toHaveBeenCalledWith("integration-1", "too_many_attempts");
+  });
+});
+
+describe("sendRdStationCompletedConversion — identificador e origem", () => {
+  it("envia com o identificador plano-comercial-90-dias-realizado e registra esse evento", async () => {
+    await sendRdStationConversion("diagnostic-1");
+    const [payloadArg] = sendConversion.mock.calls[0];
+    expect(payloadArg.conversion_identifier).toBe("plano-comercial-90-dias-realizado");
+    expect(findIntegrationByEvent).toHaveBeenCalledWith("diagnostic-1", "plano-comercial-90-dias-realizado");
+  });
+
+  it("envia a origem pelo cookie da RD quando existe, e o client_tracking_id", async () => {
+    getLeadById.mockResolvedValue(
+      lead({ rd_traffic_source: "encoded_src", rd_client_tracking_id: "trk-1", utm_source: "google", utm_medium: "cpc" }),
+    );
+    await sendRdStationConversion("diagnostic-1");
+    const [payloadArg] = sendConversion.mock.calls[0];
+    expect(payloadArg.traffic_source).toBe("encoded_src");
+    expect(payloadArg.traffic_medium).toBeUndefined();
+    expect(payloadArg.client_tracking_id).toBe("trk-1");
+  });
+});
+
+describe("sendRdStationCaptureConversion — envio do formulário inicial", () => {
+  it("envia com o identificador plano-comercial-90-dias-captura, sem exigir plano pronto", async () => {
+    getCommercialPlanResult.mockResolvedValue({ status: "not_generated" });
+    getLeadById.mockResolvedValue(lead({ name: "Maria", utm_source: "google", utm_medium: "cpc" }));
+
+    const result = await sendRdStationCaptureConversion("diagnostic-1");
+
+    expect(result).toEqual({ status: "sent" });
+    const [payloadArg] = sendConversion.mock.calls[0];
+    expect(payloadArg.conversion_identifier).toBe("plano-comercial-90-dias-captura");
+    expect(payloadArg.name).toBe("Maria");
+    expect(payloadArg.traffic_source).toBe("google");
+    expect(payloadArg.traffic_medium).toBe("cpc");
+    expect(payloadArg.cf_desafio_principal).toBeUndefined();
+    expect(completeDiagnostic).not.toHaveBeenCalled();
+    expect(createIntegrationIfAbsent).toHaveBeenCalledWith(
+      expect.objectContaining({ event_name: "plano-comercial-90-dias-captura" }),
+    );
+  });
+
+  it("não envia sem consentimento nem sem API Key", async () => {
+    getLeadById.mockResolvedValue(lead({ consent_given: false }));
+    expect(await sendRdStationCaptureConversion("diagnostic-1")).toEqual({
+      status: "skipped",
+      reason: "consent_missing",
+    });
+    envState.rdApiKey = undefined;
+    expect(await sendRdStationCaptureConversion("diagnostic-1")).toEqual({
+      status: "skipped",
+      reason: "not_configured",
+    });
+    expect(sendConversion).not.toHaveBeenCalled();
+  });
+
+  it("idempotente: já enviada -> already_sent", async () => {
+    findIntegrationByEvent.mockResolvedValue({ id: "integration-1", status: "sent", attempts: 1 });
+    expect(await sendRdStationCaptureConversion("diagnostic-1")).toEqual({ status: "already_sent" });
+    expect(sendConversion).not.toHaveBeenCalled();
   });
 });
