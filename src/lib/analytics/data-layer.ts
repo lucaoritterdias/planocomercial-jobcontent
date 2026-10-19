@@ -49,6 +49,23 @@ export function pushJourneyStep(step: JourneyStepKey, params: JourneyStepParams 
 }
 
 /**
+ * Evento de cada pergunta com o número no nome (pedido do cliente: um
+ * evento diferente por pergunta) — etapa_05_pergunta_01, _02… Mesma
+ * numeração da tela ("Pergunta X de Y").
+ */
+export function questionEventName(questionNumber: number): string {
+  return `${JOURNEY_STEPS.question.event}_${String(questionNumber).padStart(2, "0")}`;
+}
+
+export function pushQuestionStep(questionNumber: number, params: JourneyStepParams = {}): void {
+  const definition = JOURNEY_STEPS.question;
+  pushToDataLayer(
+    { event: questionEventName(questionNumber), etapa_numero: definition.number, etapa_nome: definition.name },
+    { ...params, pergunta_numero: questionNumber },
+  );
+}
+
+/**
  * Eventos de clique (pedido explícito: medir os botões de WhatsApp e o
  * download do PDF). Botões em Server Components são marcados com
  * data-gtm-click (ver ClickTracking); os de Client Components chamam

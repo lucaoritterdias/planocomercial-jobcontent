@@ -7,7 +7,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { pushJourneyStep } from "@/lib/analytics/data-layer";
+import { pushQuestionStep } from "@/lib/analytics/data-layer";
 import {
   computeProgress,
   findNextQuestion,
@@ -86,11 +86,10 @@ export function AdaptiveDiagnosticJourney({
   // pessoa para. Usa a mesma numeração da tela ("Pergunta X de Y").
   useEffect(() => {
     if (!currentItem) return;
-    pushJourneyStep("question", {
+    pushQuestionStep(currentNumber, {
       diagnostico_id: diagnosticId,
       desafio: challenge,
       pergunta_id: currentItem.key,
-      pergunta_numero: currentNumber,
       perguntas_total: progress.totalCount,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- só ao trocar de pergunta

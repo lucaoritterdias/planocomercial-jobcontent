@@ -15,7 +15,7 @@ Código: `src/lib/analytics/data-layer.ts` (lista única de eventos).
 | `etapa_03_dados_empresa` | Tela de confirmação dos dados da empresa aparece (depois da análise do site) — **indica que o formulário foi enviado** | `diagnostico_id`, `analise_site` (`concluida`, `sem_site`, `site_invalido`, `falhou`) |
 | `etapa_04_desafio` | Tela de escolha do desafio aparece | `diagnostico_id` |
 | `etapa_05_perguntas` | Entrada nas perguntas | `diagnostico_id`, `desafio` (D1 a D6) |
-| `etapa_05_pergunta` | Cada pergunta exibida | `diagnostico_id`, `desafio`, `pergunta_id`, `pergunta_numero`, `perguntas_total` |
+| `etapa_05_pergunta_01` … `etapa_05_pergunta_13` | Cada pergunta exibida — o final é o número da pergunta na tela ("Pergunta X de Y") | `diagnostico_id`, `desafio`, `pergunta_id`, `pergunta_numero`, `perguntas_total` |
 | `etapa_06_telefone` | Etapa do telefone aparece | `diagnostico_id`, `desafio` |
 | `etapa_07_gerando_plano` | Telefone enviado e geração do plano começou | `diagnostico_id`, `origem` (`telefone` ou `nova_tentativa`) |
 | `etapa_07_erro_geracao` | Tela de falha na geração do plano | `diagnostico_id` |
@@ -63,7 +63,9 @@ Botões novos de WhatsApp: basta acrescentar `data-gtm-click="whatsapp"` e
 2. **Acionadores** (Acionadores → Novo → Evento personalizado):
    - um por etapa, com o nome exato do evento (ex.: `etapa_06_telefone`); ou
    - um único para todas as etapas, marcando "Usar correspondência de
-     expressão regular" com `^etapa_.*`.
+     expressão regular" com `^etapa_.*`;
+   - um único para todas as perguntas, com a expressão regular
+     `^etapa_05_pergunta_\d+$`.
 3. **Tags**: ligue as tags (GA4, Google Ads, Meta etc.) aos acionadores.
    Para o GA4, uma tag "Evento do GA4" com nome do evento `{{Event}}`
    envia cada etapa com o próprio nome.

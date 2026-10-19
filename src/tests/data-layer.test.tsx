@@ -11,6 +11,7 @@ import {
   JOURNEY_STEPS,
   pushClickEvent,
   pushJourneyStep,
+  pushQuestionStep,
 } from "@/lib/analytics/data-layer";
 
 type DataLayerWindow = Window & { dataLayer?: Record<string, unknown>[] };
@@ -43,6 +44,34 @@ describe("pushJourneyStep", () => {
       expect(step.event).toMatch(/^etapa_\d{2}_[a-z_]+$/);
       expect(step.event.startsWith(`etapa_${String(step.number).padStart(2, "0")}_`)).toBe(true);
     }
+  });
+});
+
+describe("pushQuestionStep", () => {
+  it("envia um evento diferente por pergunta, com o número no nome", () => {
+    pushQuestionStep(1, { diagnostico_id: "d-1", pergunta_id: "q1", perguntas_total: 13 });
+    pushQuestionStep(13, { diagnostico_id: "d-1", pergunta_id: "q13", perguntas_total: 13 });
+
+    expect((window as DataLayerWindow).dataLayer).toEqual([
+      {
+        event: "etapa_05_pergunta_01",
+        etapa_numero: 5,
+        etapa_nome: "pergunta",
+        diagnostico_id: "d-1",
+        pergunta_id: "q1",
+        pergunta_numero: 1,
+        perguntas_total: 13,
+      },
+      {
+        event: "etapa_05_pergunta_13",
+        etapa_numero: 5,
+        etapa_nome: "pergunta",
+        diagnostico_id: "d-1",
+        pergunta_id: "q13",
+        pergunta_numero: 13,
+        perguntas_total: 13,
+      },
+    ]);
   });
 });
 
